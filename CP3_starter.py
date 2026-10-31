@@ -1,5 +1,7 @@
 import pybullet as p
 import pybullet_data
+import numpy as np
+from matplotlib.textpath import TextPath
 
 
 ### Setup Pybullet ###
@@ -47,6 +49,16 @@ class Panda:
         vid = p.createVisualShape(p.GEOM_SPHERE, radius=0.01, rgbaColor=[255, 255, 255, 1])
         p.createMultiBody(baseVisualShapeIndex=vid, basePosition=tip_position)
 
+    def move_arm(self, pid, point):
+        
+        joint_angles = p.calculateInverseKinematics(pid, 11, point)
+        activejoints = [0,1,2,3,4,5,6,7,8]
+        # print("Joint angles")
+        # print(joint_angles)
+       
+        for(i, jidx) in enumerate(activejoints):
+            p.setJointMotorControl2(pid, jidx, p.POSITION_CONTROL, joint_angles[i])
+        self.draw_on_blackboard()
 
 
 
@@ -54,13 +66,25 @@ if __name__ == "__main__":
     pandaId = setup_pybullet()
     panda = Panda(pandaId)
     print("Done setting up pybullet")
+    radius  = 0.5
+    theta = np.linspace(0, 2 * np.pi, 100)
+    x = 0.5 + radius * np.cos(theta)
+    y = 0.5 + radius * np.sin(theta)
+    z = np.full_like(x, 0.5)
+    points = np.column_stack((x, y))
+    points = np.column_stack((points, z))
 
     p.setRealTimeSimulation(0)
     # Start recording video 
     log_id = p.startStateLogging(p.STATE_LOGGING_VIDEO_MP4, "./video.mp4")
 
-    while p.isConnected():
+    for point in points:
+        p.stepSimulation()
+        print(point)
+        panda.move_arm(pandaId, point)
 
+    while p.isConnected():
+        
         # IMPORTANT - You need to run this command for every step in simulation
         p.stepSimulation() 
 
