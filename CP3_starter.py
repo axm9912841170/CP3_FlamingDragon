@@ -95,7 +95,15 @@ class Panda:
         #     p.resetJointState(pid, ji, joint_angles[ji])
         #self.draw_on_blackboard()
 
-
+def draw_c():
+    radius  = 0.5
+    theta = np.linspace(0, 2 * np.pi, 100)
+    x = 0.5 + radius * np.cos(theta)
+    z = 0.5 + radius * np.sin(theta)
+    y = np.full_like(x, 0.5)
+    points = np.column_stack((x, y))
+    points = np.column_stack((points, z))
+    return points
 
 
 
@@ -104,13 +112,7 @@ if __name__ == "__main__":
     panda = Panda(pandaId)
     print("Done setting up pybullet")
 
-    radius  = 0.5
-    theta = np.linspace(0, 2 * np.pi, 100)
-    x = 0.5 + radius * np.cos(theta)
-    y = 0.5 + radius * np.sin(theta)
-    z = np.full_like(x, 0.5)
-    points = np.column_stack((x, y))
-    points = np.column_stack((points, z))
+    
 
     points2 = [[0.5, 0, 0.5], [0.5, 0.01, 0.5], [0.5, 0.02, 0.5], [0.5, 0.03, 0.5], [0.5, 0.04, 0.5],
                [0.5, 0.05, 0.5], [0.5, 0.06, 0.5], [0.5, 0.07, 0.5], [0.5, 0.08, 0.5], [0.5, 0.09, 0.5],
@@ -130,27 +132,32 @@ if __name__ == "__main__":
     #for point in points2:
     c = 0
     cc= 0
+
     while True:    
         #print(point)
-        if c >= len(points3):
+        if c >= len(draw_c()):
             break
 
-        
         p.stepSimulation()
-        panda.move_arm(pandaId, [0.5,0,0.5])
+        if c == 0:
+            panda.move_arm(pandaId, [0.5, 0.5, 0.5])
+        
+            
         print("Cartesian position")
         print(panda.get_cart())
-        
+        # print(f"Circle Points: {draw_c()}")
 
         cart = panda.get_cart()
         e = cart[0]**2 + cart[1]**2 + cart[2]**2
         ee = math.sqrt(e)
         print(ee)
-        if cc > 30 and ee < 0.75:
+        if cc > 60 and ee < 0.75:
             panda.draw_on_blackboard()
             c += 1
             cc=0
             #break
+        panda.move_arm(pandaId, draw_c()[c])
+        print(f"Circle Coordinate: {draw_c()[c]}")
         cc +=1
         print(c)
         p.stopStateLogging(log_id)
