@@ -148,7 +148,7 @@ if __name__ == "__main__":
         # print(f"Circle Points: {draw_c()}")
 
         cart = panda.get_cart()
-        e = cart[0]**2 + cart[1]**2 + cart[2]**2
+        e = (cart[0] - points2[0])**2 + (cart[1] - points2[1])**2 + (cart[2] - points2[2])**2
         ee = math.sqrt(e)
         print(ee)
         if cc > 60 and ee < 0.75:
