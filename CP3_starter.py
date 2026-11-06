@@ -104,7 +104,7 @@ def go_home(panda, pandaId):
         ee = math.sqrt(e)
         print(ee)
         if cc > 10 and ee < 0.07:
-            panda.draw_on_blackboard()
+            # panda.draw_on_blackboard()
             c += 1
             cc=0
             break
@@ -120,19 +120,28 @@ def draw_c():
     theta = np.linspace(np.pi/3, (5/3)*np.pi, 100)
     y = 0.4 - radius * np.cos(theta)
     z = 0.4 + radius * np.sin(theta)
-    x = np.full_like(y, 0.4)
+    x = np.full_like(y, 0.47)
     points = np.column_stack((x, y))
     points = np.column_stack((points, z))
     return points
 
 def draw_u():
-    radius = 0.2
-    theta = np.linspace(-np.pi, np.pi, 100)
-    y = 0.2 - radius * np.cos(theta)
-    z = 0.2 + radius * np.sin(theta)
-    x = np.full_like(y, 0.4)
+    points2 = []
+    for i in range(30):
+        points2.append([0.47, 0.1, 0.6-(i*0.01)])
+    radius = 0.1
+    theta = np.linspace(np.pi, 2*np.pi, 30)
+    y = 0 - radius * np.cos(theta)
+    z = 0.3 + radius * np.sin(theta)
+    x = np.full_like(y, 0.47)
     points = np.column_stack((x, y))
     points = np.column_stack((points, z))
+    # points2.append(points)
+    points3 = []
+    for i in range(35):
+        points3.append([0.47, -0.1, 0.3+(i*0.01)])
+    points = np.concatenate((points2, points), axis=0)
+    points = np.concatenate((points, points3), axis=0)
     return points
 
 
@@ -159,7 +168,7 @@ if __name__ == "__main__":
             if dist_remaining <= 0.01: # Adjust for how close the robot needs to get to the points, in meters
                 panda.draw_on_blackboard()
                 break
-    go_home(panda)            
+    go_home(panda, pandaId)            
     u_points = draw_u()
     dist_remaining = 0
     for point in u_points:
@@ -171,10 +180,10 @@ if __name__ == "__main__":
             z_pos = panda.get_cart()[2]
             dist_remaining = np.sqrt((point[0] - x_pos)**2 + (point[1] - y_pos)**2 + (point[2]-z_pos)**2)
             print(f"This is the remaining distance: {dist_remaining}")
-            if dist_remaining <= 0.01: # Adjust for how close the robot needs to get to the points, in meters
+            if dist_remaining <= 0.02: # Adjust for how close the robot needs to get to the points, in meters
                 panda.draw_on_blackboard()
                 break
-
+    go_home(panda, pandaId)
     p.stopStateLogging(log_id)
     while p.isConnected():
         time.sleep(1/2)
