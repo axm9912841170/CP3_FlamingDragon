@@ -4,6 +4,11 @@ import numpy as np
 import time, math
 
 
+REST_POSES = [0.98, 0.458, 0.31, -2.24, -0.30, 2.66, 1.32, 0.02, 0.02] # Values from pybullet panda example, otherwise it's trial and error
+HOME_X = 0
+HOME_Y = 0.5
+HOME_Z = 0.5
+
 ### Setup Pybullet ###
 
 def setup_pybullet():
@@ -60,31 +65,25 @@ class Panda:
 
     def move_arm(self, pid, point):
         lower_limits = [-2.9671, -1.8326, -2.9671, -3.1416, -2.9671, -0.0873, -2.9671, 0.0, 0.0, 0.0, 0.0]
-        upper_limits = [2.9671, 1.8326, 2.9671, 0.0, 2.9671, 3.8223, 2.9671, -1.0, -1.0, 0.04, 0.04, -1.0]
-
-        point2 = [0,0,0]
+        upper_limits = [2.9671, 1.8326, 2.9671, 0.0, 2.9671, 3.8223, 2.9671, -1.0, -1.0, 0.04, 0.04, -1.0] # Found in getJointInfo
         move_joints = []
         ll = []
         ul = []
         joint_ranges = []
+
         for i in range(p.getNumJoints(pid)):
             joint = p.getJointInfo(pid, i)
             joint_type = joint[2]
-            # print(joint)
             if joint_type != p.JOINT_FIXED:
                 ll.append(joint[8])
                 ul.append(joint[9])
+                joint_ranges.append(joint[9] - joint[8])
                 move_joints.append(i)
-        move_joints2 = move_joints[0:7]
-        target_orientation = p.getQuaternionFromEuler([np.deg2rad(0), np.deg2rad(90), np.deg2rad(0)])
-        joint_angles = p.calculateInverseKinematics(pid, 11, point)
+
         
-        #activejoints = [0,1,2,3,4,5,6,7,8]
-        # print("Joint angles")
-        # print(len(joint_angles))
-        # print(joint_angles)
-        # print(joint_angles2)
-        # print(move_joints)
+        target_orientation = p.getQuaternionFromEuler([np.deg2rad(0), np.deg2rad(90), np.deg2rad(0)])
+        joint_angles = p.calculateInverseKinematics(pid, 11, point, lowerLimits=ll, upperLimits=ul, restPoses=REST_POSES, jointRanges=joint_ranges, targetOrientation=target_orientation, maxNumIterations=100, residualThreshold=1e-4)
+
         p.setJointMotorControlArray(
             bodyIndex = pid,
             jointIndices = move_joints,
@@ -97,14 +96,13 @@ def go_home(panda, pandaId):
     c = 0
     cc= 0
     while True:
-        panda.move_arm(pandaId, [0, 0.5, 0.5])
+        panda.move_arm(pandaId, [HOME_X, HOME_Y, HOME_Z])
         p.stepSimulation()
         cart = panda.get_cart()
-        e = (cart[0] - 0)**2 + (cart[1] -0.5)**2 + (cart[2] - 0.5)**2
+        e = (cart[0] - HOME_X)**2 + (cart[1] -HOME_Y)**2 + (cart[2] -HOME_Z)**2
         ee = math.sqrt(e)
         print(ee)
-        if cc > 10 and ee < 0.07:
-            # panda.draw_on_blackboard()
+        if ee < 0.07:
             c += 1
             cc=0
             break
@@ -112,34 +110,44 @@ def go_home(panda, pandaId):
         cc +=1
         print(c)
         print(cc)
-        p.stopStateLogging(log_id)
         time.sleep(1/240)
 
-def draw_c():
+def reset_joints(pid): # Resets joints to the REST_POSE values, used to set initial position
+    move_joints = []
+    for i in range(p.getNumJoints(pid)):
+        joint = p.getJointInfo(pid, i)
+        joint_type = joint[2]
+        if joint_type != p.JOINT_FIXED:
+            move_joints.append(i)
+    for pose_i, joint_id in enumerate(move_joints):
+        p.resetJointState(pid, joint_id, REST_POSES[pose_i])
+    return None
+
+def draw_c(): # Creates the array of points in a C shape
     radius  = 0.2
     theta = np.linspace(np.pi/3, (5/3)*np.pi, 100)
     y = 0.4 - radius * np.cos(theta)
-    z = 0.4 + radius * np.sin(theta)
+    z = 0.6 + radius * np.sin(theta)
     x = np.full_like(y, 0.47)
     points = np.column_stack((x, y))
     points = np.column_stack((points, z))
     return points
 
-def draw_u():
+def draw_u(): # Creates the array of points in a U shape
     points2 = []
     for i in range(30):
-        points2.append([0.47, 0.1, 0.6-(i*0.01)])
+        points2.append([0.47, 0.1, 0.8-(i*0.01)])
     radius = 0.1
     theta = np.linspace(np.pi, 2*np.pi, 30)
     y = 0 - radius * np.cos(theta)
-    z = 0.3 + radius * np.sin(theta)
+    z = 0.55 + radius * np.sin(theta)
     x = np.full_like(y, 0.47)
     points = np.column_stack((x, y))
     points = np.column_stack((points, z))
     # points2.append(points)
     points3 = []
-    for i in range(35):
-        points3.append([0.47, -0.1, 0.3+(i*0.01)])
+    for i in range(30):
+        points3.append([0.47, -0.1, 0.55+(i*0.01)])
     points = np.concatenate((points2, points), axis=0)
     points = np.concatenate((points, points3), axis=0)
     return points
@@ -149,13 +157,14 @@ if __name__ == "__main__":
     pandaId = setup_pybullet()
     panda = Panda(pandaId)
     print("Done setting up pybullet")
-
     p.setRealTimeSimulation(0)
+
     # Start recording video 
     log_id = p.startStateLogging(p.STATE_LOGGING_VIDEO_MP4, "./video.mp4")
-
+    reset_joints(pandaId) # Set initial pose
     c_points = draw_c()
     dist_remaining = 0
+
     for point in c_points:
         while True:
             panda.move_arm(pandaId, point)
@@ -168,9 +177,12 @@ if __name__ == "__main__":
             if dist_remaining <= 0.01: # Adjust for how close the robot needs to get to the points, in meters
                 panda.draw_on_blackboard()
                 break
-    go_home(panda, pandaId)            
+
+    go_home(panda, pandaId)
+    reset_joints(pandaId)           
     u_points = draw_u()
     dist_remaining = 0
+
     for point in u_points:
         while True:
             panda.move_arm(pandaId, point)
@@ -180,19 +192,13 @@ if __name__ == "__main__":
             z_pos = panda.get_cart()[2]
             dist_remaining = np.sqrt((point[0] - x_pos)**2 + (point[1] - y_pos)**2 + (point[2]-z_pos)**2)
             print(f"This is the remaining distance: {dist_remaining}")
-            if dist_remaining <= 0.02: # Adjust for how close the robot needs to get to the points, in meters
+            if dist_remaining <= 0.01: # Adjust for how close the robot needs to get to the points, in meters
                 panda.draw_on_blackboard()
                 break
+
     go_home(panda, pandaId)
     p.stopStateLogging(log_id)
     while p.isConnected():
         time.sleep(1/2)
-    #     panda.move_arm(pid=pandaId)
-    #     # IMPORTANT - You need to run this command for every step in simulation
-    #     p.stepSimulation() 
-        
-    #     # Command to stop recording whenx done
-    #     p.stopStateLogging(log_id)
-        #break
 
     p.disconnect()
