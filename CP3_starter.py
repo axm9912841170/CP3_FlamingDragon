@@ -59,18 +59,26 @@ class Panda:
         p.createMultiBody(baseVisualShapeIndex=vid, basePosition=tip_position)
 
     def move_arm(self, pid, point):
-        #point = [0.5,0.5,0.5]
+        lower_limits = [-2.9671, -1.8326, -2.9671, -3.1416, -2.9671, -0.0873, -2.9671, 0.0, 0.0, 0.0, 0.0]
+        upper_limits = [2.9671, 1.8326, 2.9671, 0.0, 2.9671, 3.8223, 2.9671, -1.0, -1.0, 0.04, 0.04, -1.0]
+
         point2 = [0,0,0]
         move_joints = []
+        ll = []
+        ul = []
+        joint_ranges = []
         for i in range(p.getNumJoints(pid)):
             joint = p.getJointInfo(pid, i)
             joint_type = joint[2]
-            print(joint)
+            # print(joint)
             if joint_type != p.JOINT_FIXED:
+                ll.append(joint[8])
+                ul.append(joint[9])
                 move_joints.append(i)
         move_joints2 = move_joints[0:7]
+        target_orientation = p.getQuaternionFromEuler([np.deg2rad(0), np.deg2rad(90), np.deg2rad(0)])
         joint_angles = p.calculateInverseKinematics(pid, 11, point)
-        joint_angles2 = p.calculateInverseKinematics(pid, 11, point2)
+        
         #activejoints = [0,1,2,3,4,5,6,7,8]
         # print("Joint angles")
         # print(len(joint_angles))
@@ -85,22 +93,34 @@ class Panda:
             forces = [30.0] * len(move_joints)
         )
 
-        # for(i, jidx) in enumerate(move_joints):
-
-        #     p.setJointMotorControl2(pid,jidx,p.POSITION_CONTROL,joint_angles[i])
-        # print("hello")
-        # print(p.getNumJoints(pid))
-        # print(len(joint_angles))
-        # for ji in range(p.getNumJoints):
-        #     p.resetJointState(pid, ji, joint_angles[ji])
-        #self.draw_on_blackboard()
+def go_home(panda, pandaId):
+    c = 0
+    cc= 0
+    while True:
+        panda.move_arm(pandaId, [0, 0.5, 0.5])
+        p.stepSimulation()
+        cart = panda.get_cart()
+        e = (cart[0] - 0)**2 + (cart[1] -0.5)**2 + (cart[2] - 0.5)**2
+        ee = math.sqrt(e)
+        print(ee)
+        if cc > 10 and ee < 0.07:
+            panda.draw_on_blackboard()
+            c += 1
+            cc=0
+            break
+    
+        cc +=1
+        print(c)
+        print(cc)
+        p.stopStateLogging(log_id)
+        time.sleep(1/240)
 
 def draw_c():
-    radius  = 0.5
-    theta = np.linspace(0, 2 * np.pi, 100)
-    x = 0.5 + radius * np.cos(theta)
-    z = 0.5 + radius * np.sin(theta)
-    y = np.full_like(x, 0.5)
+    radius  = 0.1
+    theta = np.linspace(np.pi/3, (5/3)*np.pi, 100)
+    y = 0.4 - radius * np.cos(theta)
+    z = 0.4 + radius * np.sin(theta)
+    x = np.full_like(y, 0.4)
     points = np.column_stack((x, y))
     points = np.column_stack((points, z))
     return points
@@ -114,15 +134,15 @@ if __name__ == "__main__":
 
     
 
-    points2 = [[0.5, 0, 0.5], [0.5, 0.01, 0.5], [0.5, 0.02, 0.5], [0.5, 0.03, 0.5], [0.5, 0.04, 0.5],
-               [0.5, 0.05, 0.5], [0.5, 0.06, 0.5], [0.5, 0.07, 0.5], [0.5, 0.08, 0.5], [0.5, 0.09, 0.5],
-               [0.5, 0.1, 0.5], [0.5, 0.11, 0.5], [0.5, 0.13, 0.5], [0.5, 0.14, 0.5], [0.5, 0.15, 0.5],
-               [0.5, 0.16, 0.5], [0.5, 0.17, 0.5], [0.5, 0.18, 0.5], [0.5, 0.19, 0.5], [0.5, 0.2, 0.5]]
-    points3 = [[0, 0.5, 0.5], [0.01, 0.5, 0.5], [0.02, 0.5, 0.5], [0.03, 0.5, 0.5], [0.04, 0.5, 0.5],
-                   [0.05, 0.5, 0.5], [0.06, 0.5, 0.5], [0.07, 0.5, 0.5], [0.08, 0.5, 0.5], [0.09, 0.5, 0.5],
-                   [0.1, 0.5, 0.5], [0.11, 0.5, 0.5], [0.12, 0.5, 0.5], [0.13, 0.5, 0.5], [0.14, 0.5, 0.5],
-                   [0.15, 0.5, 0.5], [0.16, 0.5, 0.5], [0.17, 0.5, 0.5], [0.18, 0.5, 0.5], [0.19, 0.05, 0.5],]
-    points4 = [[0.5,0,0.5],[0.55,0,0.5]]
+    # points2 = [[0.5, 0, 0.5], [0.5, 0.01, 0.5], [0.5, 0.02, 0.5], [0.5, 0.03, 0.5], [0.5, 0.04, 0.5],
+    #            [0.5, 0.05, 0.5], [0.5, 0.06, 0.5], [0.5, 0.07, 0.5], [0.5, 0.08, 0.5], [0.5, 0.09, 0.5],
+    #            [0.5, 0.1, 0.5], [0.5, 0.11, 0.5], [0.5, 0.13, 0.5], [0.5, 0.14, 0.5], [0.5, 0.15, 0.5],
+    #            [0.5, 0.16, 0.5], [0.5, 0.17, 0.5], [0.5, 0.18, 0.5], [0.5, 0.19, 0.5], [0.5, 0.2, 0.5]]
+    # points3 = [[0, 0.5, 0.5], [0.01, 0.5, 0.5], [0.02, 0.5, 0.5], [0.03, 0.5, 0.5], [0.04, 0.5, 0.5],
+    #                [0.05, 0.5, 0.5], [0.06, 0.5, 0.5], [0.07, 0.5, 0.5], [0.08, 0.5, 0.5], [0.09, 0.5, 0.5],
+    #                [0.1, 0.5, 0.5], [0.11, 0.5, 0.5], [0.12, 0.5, 0.5], [0.13, 0.5, 0.5], [0.14, 0.5, 0.5],
+    #                [0.15, 0.5, 0.5], [0.16, 0.5, 0.5], [0.17, 0.5, 0.5], [0.18, 0.5, 0.5], [0.19, 0.05, 0.5],]
+    # points4 = [[0.5,0,0.5],[0.55,0,0.5]]
     #print(points)
 
     p.setRealTimeSimulation(0)
@@ -130,39 +150,53 @@ if __name__ == "__main__":
     log_id = p.startStateLogging(p.STATE_LOGGING_VIDEO_MP4, "./video.mp4")
 
     #for point in points2:
-    c = 0
-    cc= 0
+    # c = 0
+    # cc= 0
 
-    while True:    
-        #print(point)
-        if c >= len(draw_c()):
-            break
+    # while True:    
+    #     #print(point)
+    #     if c >= len(draw_c()):
+    #         break
 
-        p.stepSimulation()
-        if c == 0:
-            panda.move_arm(pandaId, [0.5, 0.5, 0.5])
+    #     p.stepSimulation()
+    #     if c == 0:
+    #         panda.move_arm(pandaId, [0.5, 0.5, 0.5])
         
             
-        print("Cartesian position")
-        print(panda.get_cart())
-        # print(f"Circle Points: {draw_c()}")
+    #     print("Cartesian position")
+    #     print(panda.get_cart())
+    #     # print(f"Circle Points: {draw_c()}")
 
-        cart = panda.get_cart()
-        e = (cart[0] - points2[0])**2 + (cart[1] - points2[1])**2 + (cart[2] - points2[2])**2
-        ee = math.sqrt(e)
-        print(ee)
-        if cc > 60 and ee < 0.75:
-            panda.draw_on_blackboard()
-            c += 1
-            cc=0
-            #break
-        panda.move_arm(pandaId, draw_c()[c])
-        print(f"Circle Coordinate: {draw_c()[c]}")
-        cc +=1
-        print(c)
-        p.stopStateLogging(log_id)
-        time.sleep(1/100)
+    #     cart = panda.get_cart()
+    #     e = (cart[0] - points2[0])**2 + (cart[1] - points2[1])**2 + (cart[2] - points2[2])**2
+    #     ee = math.sqrt(e)
+    #     print(ee)
+    #     if cc > 60 and ee < 0.75:
+    #         panda.draw_on_blackboard()
+    #         c += 1
+    #         cc=0
+    #         #break
+    #     panda.move_arm(pandaId, draw_c()[c])
+    #     print(f"Circle Coordinate: {draw_c()[c]}")
+    #     cc +=1
+    #     print(c)
     
+    #     time.sleep(1/100)
+    points = draw_c()
+    dist_remaining = 0
+    for point in points:
+        while True:
+            panda.move_arm(pandaId, point)
+            p.stepSimulation()
+            x_pos = panda.get_cart()[0]
+            y_pos = panda.get_cart()[1]
+            z_pos = panda.get_cart()[2]
+            dist_remaining = np.sqrt((point[0] - x_pos)**2 + (point[1] - y_pos)**2 + (point[2]-z_pos)**2)
+            print(f"This is the remaining distance: {dist_remaining}")
+            if dist_remaining <= 0.01: # Adjust for how close the robot needs to get to the points, in meters
+                panda.draw_on_blackboard()
+                break
+    p.stopStateLogging(log_id)
     while p.isConnected():
         time.sleep(1/2)
     #     panda.move_arm(pid=pandaId)
