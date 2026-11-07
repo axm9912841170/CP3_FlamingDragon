@@ -211,8 +211,24 @@ if __name__ == "__main__":
             if dist_remaining <= 0.01: # Adjust for how close the robot needs to get to the points, in meters
                 panda.draw_on_blackboard()
                 break
-
+    
     go_home(panda, pandaId)
+    time.sleep(1)
+    reset_joints(pandaId)
+    buff_points = draw_buff()
+
+    for point in buff_points:
+        while True:
+            panda.move_arm(pandaId, point)
+            p.stepSimulation()
+            x_pos = panda.get_cart()[0]
+            y_pos = panda.get_cart()[1]
+            z_pos = panda.get_cart()[2]
+            dist_remaining = np.sqrt((point[0] - x_pos)**2 + (point[1] - y_pos)**2 + (point[2]-z_pos)**2)
+            if dist_remaining <= 0.01: # Adjust for how close the robot needs to get to the points, in meters
+                panda.draw_on_blackboard()
+                break
+    go_home(panda, pandaId)       
     p.stopStateLogging(log_id)
     while p.isConnected():
         time.sleep(1/2)
