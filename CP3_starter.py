@@ -1,3 +1,9 @@
+"""
+CP3.py
+purpose: This is our implementation of the third challenge problem to draw on a blackboard in 3d space with a robotic arm
+authors: Alex Martinez and Zach Posch
+date: 11/7/2026
+"""
 import pybullet as p
 import pybullet_data
 import numpy as np
@@ -5,9 +11,6 @@ import time, math
 
 
 REST_POSES = [0.98, 0.458, 0.31, -2.24, -0.30, 2.66, 1.32, 0.02, 0.02] # Values from pybullet panda example, otherwise it's trial and error
-HOME_X = 0
-HOME_Y = 0.5
-HOME_Z = 0.5
 
 ### Setup Pybullet ###
 
@@ -42,12 +45,15 @@ class Panda:
         self.pandaId = pandaId
 
     def get_cart(self):
+        """
+        Get the current cartesian position in 3d space of the simulation to see if we are where we think we should be
+        """
         end_effector_index = 11
         link_state = p.getLinkState(self.pandaId, end_effector_index, computeForwardKinematics=True)
         # Position andd orientation of the link in the base frame.
         link_position = link_state[0]
         tip_position = list(link_position)
-        print(tip_position)
+        # print(tip_position)
         return tip_position
 
     def draw_on_blackboard(self):
@@ -63,27 +69,38 @@ class Panda:
         vid = p.createVisualShape(p.GEOM_SPHERE, radius=0.01, rgbaColor=[255, 255, 255, 1])
         p.createMultiBody(baseVisualShapeIndex=vid, basePosition=tip_position)
 
-    def move_arm(self, pid, point):
-        lower_limits = [-2.9671, -1.8326, -2.9671, -3.1416, -2.9671, -0.0873, -2.9671, 0.0, 0.0, 0.0, 0.0]
-        upper_limits = [2.9671, 1.8326, 2.9671, 0.0, 2.9671, 3.8223, 2.9671, -1.0, -1.0, 0.04, 0.04, -1.0] # Found in getJointInfo
+    def move_arm(self, pid, point, drawing):
+        """
+        This function moves the robot arm to the desired postion in the simulated space
+        """
+        # Used to save info on the individual joints of the arm for manipulation
         move_joints = []
         ll = []
         ul = []
         joint_ranges = []
 
+        # Go through the whole arm to get specific info on it
         for i in range(p.getNumJoints(pid)):
             joint = p.getJointInfo(pid, i)
             joint_type = joint[2]
+            # If the joint is moveable save the upper limit, lower limit, joint ranges from it
             if joint_type != p.JOINT_FIXED:
                 ll.append(joint[8])
                 ul.append(joint[9])
                 joint_ranges.append(joint[9] - joint[8])
                 move_joints.append(i)
 
-        
+        # Specify the orientation of the arm, this was found through much trial and error.
         target_orientation = p.getQuaternionFromEuler([np.deg2rad(0), np.deg2rad(90), np.deg2rad(0)])
-        joint_angles = p.calculateInverseKinematics(pid, 11, point, lowerLimits=ll, upperLimits=ul, restPoses=REST_POSES, jointRanges=joint_ranges, targetOrientation=target_orientation, maxNumIterations=100, residualThreshold=1e-4)
 
+        # If are drawing the CU use the specific info we found works best
+        if drawing == "cu":
+            joint_angles = p.calculateInverseKinematics(pid, 11, point, lowerLimits=ll, upperLimits=ul, restPoses=REST_POSES, jointRanges=joint_ranges, targetOrientation=target_orientation, maxNumIterations=100, residualThreshold=1e-4)
+        # If you are doing the extra credit, I found it's best to use the default arguments
+        elif drawing == "buff":
+            joint_angles = p.calculateInverseKinematics(pid, 11, point)
+
+        # Set each of the joints calculated above
         p.setJointMotorControlArray(
             bodyIndex = pid,
             jointIndices = move_joints,
@@ -93,66 +110,98 @@ class Panda:
         )
 
 def go_home(panda, pandaId):
-    c = 0
-    cc= 0
+    """
+    Move the arm away from the board, specifically in the x axis so that we can see what was drawn after it is done. 
+    """
+    HOME_X = 0
+    HOME_Y = 0.5
+    HOME_Z = 0.5
     while True:
-        panda.move_arm(pandaId, [HOME_X, HOME_Y, HOME_Z])
+        # Move the arm home
+        panda.move_arm(pandaId, [HOME_X, HOME_Y, HOME_Z], "buff")
         p.stepSimulation()
+        # Calcualte the distance between current position and home position
         cart = panda.get_cart()
-        e = (cart[0] - HOME_X)**2 + (cart[1] -HOME_Y)**2 + (cart[2] -HOME_Z)**2
-        ee = math.sqrt(e)
-        print(ee)
-        if ee < 0.07:
-            c += 1
-            cc=0
+        euclid = (cart[0] - HOME_X)**2 + (cart[1] -HOME_Y)**2 + (cart[2] -HOME_Z)**2
+        euclid = math.sqrt(euclid)
+        if euclid < 0.07:
             break
-    
-        cc +=1
-        print(c)
-        print(cc)
         time.sleep(1/240)
 
-def reset_joints(pid): # Resets joints to the REST_POSE values, used to set initial position
+def reset_joints(pid): 
+    """
+    This function resets the joints in the robot arm so that it can start to draw another shape without getting stuck.
+    """
     move_joints = []
+    # Go through and see which joints are even moveable 
     for i in range(p.getNumJoints(pid)):
         joint = p.getJointInfo(pid, i)
         joint_type = joint[2]
         if joint_type != p.JOINT_FIXED:
             move_joints.append(i)
+    # For each joint in the arm reset it back to where it was at the beginning
     for pose_i, joint_id in enumerate(move_joints):
         p.resetJointState(pid, joint_id, REST_POSES[pose_i])
     return None
 
-def draw_c(): # Creates the array of points in a C shape
+def draw_c(): 
+    """
+    Creates the array of points in a C shape.
+    The points are in the format of [x, y, z] and are in meters. 
+    The x values are all the same because the robot can only move in the y and z directions when drawing on the board. 
+    The y and z values are the coordinates of the points on the board.
+    """
     radius  = 0.2
+    # Don't go all the way around the circle
     theta = np.linspace(np.pi/3, (5/3)*np.pi, 100)
-    y = 0.4 - radius * np.cos(theta)
-    z = 0.6 + radius * np.sin(theta)
+    y = 0.45 - radius * np.cos(theta)
+    z = 0.65 + radius * np.sin(theta)
     x = np.full_like(y, 0.47)
     points = np.column_stack((x, y))
     points = np.column_stack((points, z))
     return points
 
-def draw_u(): # Creates the array of points in a U shape
+def draw_u():
+    """
+    Creates the array of points in a U shape.
+    This is broken into three sections the first line, the bottom curve, and the second line. 
+    The points are in the format of [x, y, z] and are in meters. 
+    The x values are all the same because the robot can only move in the y and z directions when drawing on the board. 
+    The y and z values are the coordinates of the points on the board.
+    """
+    # Make the first downward line
     points2 = []
-    for i in range(30):
-        points2.append([0.47, 0.1, 0.8-(i*0.01)])
-    radius = 0.1
-    theta = np.linspace(np.pi, 2*np.pi, 30)
-    y = 0 - radius * np.cos(theta)
-    z = 0.55 + radius * np.sin(theta)
+    for i in range(27):
+        points2.append([0.47, 0.25, 0.86-(i*0.01)])
+
+    # Make the bottom curve
+    radius = 0.15 # This was found by trial and error to make the curve look good on the board.
+    theta = np.linspace(np.pi, 2*np.pi, 60)
+    # Start at the end of the first line and make the curve go down and to the right
+    y = 0.1 - radius * np.cos(theta)
+    z = 0.59 + radius * np.sin(theta)
     x = np.full_like(y, 0.47)
     points = np.column_stack((x, y))
     points = np.column_stack((points, z))
-    # points2.append(points)
+
+    # Make the second upward line from the curve
     points3 = []
-    for i in range(30):
-        points3.append([0.47, -0.1, 0.55+(i*0.01)])
+    for i in range(27):
+        points3.append([0.47, -0.05, 0.59+(i*0.01)])
+
+    # Add the three sections together to make the U shape
     points = np.concatenate((points2, points), axis=0)
     points = np.concatenate((points, points3), axis=0)
     return points
 
 def draw_buff():
+    """
+    Return the points needed to draw a buffalo on the board.
+    These were obtained by tracing the outline of the logo in Blender and exporting the points here. 
+    The points are in the format of [x, y, z] and are in meters. 
+    The x values are all the same because the robot can only move in the y and z directions when drawing on the board. 
+    The y and z values are the coordinates of the points on the board.
+    """
     return np.array([[0.47,0.264,0.320],[0.47,0.303,0.320],[0.47,0.347,0.329],[0.47,0.378,0.341],[0.47,0.394,0.349],[0.47,0.404,0.273],[0.47,0.414,0.230],
                      [0.47,0.436,0.198],[0.47,0.456,0.192],[0.47,0.479,0.162],[0.47,0.499,0.149],[0.47,0.523,0.151],[0.47,0.553,0.187],[0.47,0.580,0.236],
                      [0.47,0.590,0.260],[0.47,0.591,0.297],[0.47,0.581,0.322],[0.47,0.573,0.349],[0.47,0.552,0.377],[0.47,0.537,0.403],[0.47,0.537,0.435],
@@ -167,6 +216,101 @@ def draw_buff():
                       [0.47,-0.044,0.236],[0.47,-0.021,0.209],[0.47,-0.015,0.199],[0.47,0.047,0.198],[0.47,0.084,0.192],[0.47,0.115,0.196],[0.47,0.125,0.215],
                       [0.47,0.121,0.274],[0.47,0.109,0.318],[0.47,0.098,0.346],[0.47,0.091,0.353],[0.47,0.146,0.352],[0.47,0.175,0.338],[0.47,0.213,0.326]])
 
+def do_cu():
+    """
+    This function draws the letters "CU" on the blackboard. You can use the draw_c() and draw_u() functions to get the points for the letters.
+    """
+    # Get the points for the letters C 
+    c_points = draw_c()
+    dist_remaining = 0
+
+    # Draw the C
+    for point in c_points:
+        # Keep looping until the arm gets to the desired point
+        # Note: It does not automatically teleport to the point, it will move there over several iterations
+        while True:
+            # Move the arm to the desired point
+            panda.move_arm(pandaId, point, "cu")
+            p.stepSimulation()
+
+            # Get the distance between current location and desired point
+            x_pos = panda.get_cart()[0]
+            y_pos = panda.get_cart()[1]
+            z_pos = panda.get_cart()[2]
+            dist_remaining = np.sqrt((point[0] - x_pos)**2 + (point[1] - y_pos)**2 + (point[2]-z_pos)**2)
+            # print(f"This is the remaining distance: {dist_remaining}")
+
+            # Adjust for how close the robot needs to get to the points, in meters
+            if dist_remaining <= 0.01: # 
+                panda.draw_on_blackboard()
+                break
+
+    # Move the arm away form the board and reset its joints so that it can reach the U without getting stuck
+    go_home(panda, pandaId)
+    reset_joints(pandaId)     
+
+    # Get the points for the U      
+    u_points = draw_u()
+    dist_remaining = 0
+
+    # Draw the U
+    for point in u_points:
+        # Keep looping until the arm gets to the desired point
+        # Note: It does not automatically teleport to the point, it will move there over several iterations
+        while True:
+            # Move the arm to the desired point
+            panda.move_arm(pandaId, point, "cu")
+            p.stepSimulation()
+
+            # Get the distance between current location and desired point
+            x_pos = panda.get_cart()[0]
+            y_pos = panda.get_cart()[1]
+            z_pos = panda.get_cart()[2]
+            dist_remaining = np.sqrt((point[0] - x_pos)**2 + (point[1] - y_pos)**2 + (point[2]-z_pos)**2)
+            # print(f"This is the remaining distance: {dist_remaining}")
+
+            # Adjust for how close the robot needs to get to the points, in meters
+            if dist_remaining <= 0.01: 
+                panda.draw_on_blackboard()
+                break
+
+    # Move the arm away from the board so you can see what has been drawn
+    go_home(panda, pandaId)
+    time.sleep(1)
+
+def do_extra_credit():
+    """
+    This function draws the buff logo on the blackboard. You can use the draw_buff() function to get the points for the buff logo.
+    """
+    dist_remaining = 0
+    # Get the points for the buff logo
+    buff_points = draw_buff()
+ 
+    # raise the points by 0.05 meters and move them to the left by 0.15 meters so that the robot can reach them without getting stuck
+    buff_points[:, 2] = buff_points[:, 2] + 0.1
+    buff_points[:,1] = buff_points[:,1] + 0.15
+
+    for point in buff_points:
+        # Keep looping until the arm gets to the desired point
+        # Note: It does not automatically teleport to the point, it will move there over several iterations.
+        while True:
+            # Move the arm to the desired point
+            panda.move_arm(pandaId, point, "buff")
+            p.stepSimulation()
+
+            # Calculate the distance between the current position of the end effector and the desired point
+            x_pos = panda.get_cart()[0]
+            y_pos = panda.get_cart()[1]
+            z_pos = panda.get_cart()[2]
+            dist_remaining = np.sqrt((point[0] - x_pos)**2 + (point[1] - y_pos)**2 + (point[2]-z_pos)**2)
+
+             # Adjust for how close the robot needs to get to the points, in meters
+            if dist_remaining <= 0.01:
+                panda.draw_on_blackboard()
+                break
+
+    # Move the arm after the drawing is done so you can see what was drawn. 
+    go_home(panda, pandaId) 
 
 
 if __name__ == "__main__":
@@ -177,59 +321,18 @@ if __name__ == "__main__":
 
     # Start recording video 
     log_id = p.startStateLogging(p.STATE_LOGGING_VIDEO_MP4, "./video.mp4")
-    reset_joints(pandaId) # Set initial pose
-    c_points = draw_c()
-    dist_remaining = 0
 
-    for point in c_points:
-        while True:
-            panda.move_arm(pandaId, point)
-            p.stepSimulation()
-            x_pos = panda.get_cart()[0]
-            y_pos = panda.get_cart()[1]
-            z_pos = panda.get_cart()[2]
-            dist_remaining = np.sqrt((point[0] - x_pos)**2 + (point[1] - y_pos)**2 + (point[2]-z_pos)**2)
-            print(f"This is the remaining distance: {dist_remaining}")
-            if dist_remaining <= 0.01: # Adjust for how close the robot needs to get to the points, in meters
-                panda.draw_on_blackboard()
-                break
-
-    go_home(panda, pandaId)
-    reset_joints(pandaId)           
-    u_points = draw_u()
-    dist_remaining = 0
-
-    for point in u_points:
-        while True:
-            panda.move_arm(pandaId, point)
-            p.stepSimulation()
-            x_pos = panda.get_cart()[0]
-            y_pos = panda.get_cart()[1]
-            z_pos = panda.get_cart()[2]
-            dist_remaining = np.sqrt((point[0] - x_pos)**2 + (point[1] - y_pos)**2 + (point[2]-z_pos)**2)
-            print(f"This is the remaining distance: {dist_remaining}")
-            if dist_remaining <= 0.01: # Adjust for how close the robot needs to get to the points, in meters
-                panda.draw_on_blackboard()
-                break
+    # Set initial pose
+    reset_joints(pandaId) 
     
-    go_home(panda, pandaId)
-    time.sleep(1)
-    reset_joints(pandaId)
-    buff_points = draw_buff()
+    # Comment this line out if you want to do the extra credit, but make sure to uncomment the do_extra_credit() line below
+    do_cu()
 
-    for point in buff_points:
-        while True:
-            panda.move_arm(pandaId, point)
-            p.stepSimulation()
-            x_pos = panda.get_cart()[0]
-            y_pos = panda.get_cart()[1]
-            z_pos = panda.get_cart()[2]
-            dist_remaining = np.sqrt((point[0] - x_pos)**2 + (point[1] - y_pos)**2 + (point[2]-z_pos)**2)
-            if dist_remaining <= 0.01: # Adjust for how close the robot needs to get to the points, in meters
-                panda.draw_on_blackboard()
-                break
-    go_home(panda, pandaId)       
+    # Uncomment this line if you want to do the extra credit, but make sure to comment out the do_cu() line above
+    # do_extra_credit()
+
     p.stopStateLogging(log_id)
+    # Get the simulation to stop running without closing the window
     while p.isConnected():
         time.sleep(1/2)
 
